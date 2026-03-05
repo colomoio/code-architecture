@@ -26,19 +26,21 @@ Organize the codebase by domain instead of by technology. This keeps related log
 
 ```
 src/
-  [domain]/           # e.g. workout/
-    domain/           # Types, business logic, utilities
-    repositories/     # Data access layer
-    db/               # Static data (JSON)
-    ui/               # Components and hooks
-      hooks/          # Domain-specific hooks
-    assets/           # Domain-specific assets
-  core/               # Shared infrastructure
-    i18n/             # Internationalization
-    ui/               # Design system components
-  components/         # Feature components (page-level)
-  pages/              # File-based routes (e.g. TanStack Router)
-  utility/            # General utilities
+ ├── [domain]/           # e.g. workout/
+ │   ├── assets/         # Domain-specific assets
+ │   ├── db/             # Static data (JSON)
+ │   ├── domain/         # Types, business logic, utilities
+ │   ├── infra/          # Domain-level infrastructure (external communication for this domain)
+ │   ├── repositories/   # Data access layer
+ │   └── ui/             # Components and hooks
+ │       └── hooks/      # Domain-specific hooks
+ ├── components/         # Feature components (page-level)
+ ├── core/               # Shared infrastructure
+ │   ├── i18n/           # Internationalization
+ │   └── ui/             # Design system components
+ ├── infra/              # App-level infrastructure (external communication: localStorage, server, etc)
+ ├── pages/              # File-based routes (e.g. TanStack Router)
+ └── utility/            # General utilities
 ```
 
 ---
