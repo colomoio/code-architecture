@@ -1,6 +1,6 @@
 # Code Architecture Guide
 
-A collection of frontend development and UI/UX patterns generalized from a real-world React/TypeScript project. These guidelines are intended to help maintain consistency, improve developer productivity, and foster accessible user experiences in modern web applications for the colomo.io organization.
+A collection of frontend development and UI/UX patterns generalized from a real-world React/TypeScript project. These guidelines are intended to help maintain consistency, improve developer productivity, and establish a shared language across teams.
 
 ## Table of Contents
 
@@ -26,22 +26,90 @@ Organize the codebase by domain instead of by technology. This keeps related log
 
 ```
 src/
- ├── [domain]/           # e.g. workout/
- │   ├── assets/         # Domain-specific assets
- │   ├── db/             # Static data (JSON)
- │   ├── domain/         # Types, business logic, utilities
- │   ├── infra/          # Domain-level infrastructure (external communication for this domain)
- │   ├── repositories/   # Data access layer
- │   └── ui/             # Components and hooks
- │       └── hooks/      # Domain-specific hooks
- ├── components/         # Feature components (page-level)
- ├── core/               # Shared infrastructure
- │   ├── i18n/           # Internationalization
- │   └── ui/             # Design system components
- ├── infra/              # App-level infrastructure (external communication: localStorage, server, etc)
- ├── pages/              # File-based routes (e.g. TanStack Router)
- └── utility/            # General utilities
+  core/                 # Cross-cutting code that belongs to no feature
+  │   ├── domain/       # Shared business vocabulary: value objects, ids, invariants
+  │   ├── lib/          # Generic utilities with no business meaning
+  │   ├── ui/           # Design-system components
+  │   ├── i18n/         # Internationalization
+  │   └── infra/        # Technical plumbing shared across slices
+
+  <slice>/              # One folder per business capability (e.g. workout/)
+  │   ├── domain/       # Entities, value objects, business rules. Pure.
+  │   ├── use-cases/    # Orchestration of domain + repositories
+  │   ├── repositories/ # Concrete adapters to the outer world
+  │   ├── infra/        # Slice-specific technical plumbing
+  │   └── ui/           # Components and hooks
+  │       └── hooks/    # Domain-specific hooks
+
+  pages/                # File-based routes (e.g. TanStack Router)
 ```
+
+### Layers are roles
+
+The same layer name means the same role wherever it appears; only the *destination* changes with the environment.
+
+**`domain/`** — Entities, value objects, and business rules. Pure: no I/O, no framework imports, no environment APIs. Isomorphic by construction. Wire-crossing vocabulary (schemas for DTOs, event unions, enums) is defined here.
+
+**`use-cases/`** — The operations the application can perform, expressed as functions that coordinate domain rules and repositories. This layer exists on whichever side needs orchestration:
+- *Server use-cases* coordinate domain + server repositories (database, external services) and are the only sanctioned entry point into a slice from other slices.
+- *Client use-cases* coordinate domain + client repositories for multi-step client flows. If a flow is one call, skip the use-case and let `ui/` call the repository directly — client use-cases earn their existence through orchestration, not ceremony.
+
+A client never calls a *server* use-case directly. The wire sits between two repositories/edges, never between a caller and a use-case.
+
+**`repositories/`** — Concrete adapters that answer "get or persist this, caller doesn't care from where."
+- On the server: database clients, third-party service calls.
+- On the client: typed wrappers over the transport — server-function calls, RPC, fetch. They parse wire shapes into local domain types.
+
+Ports (interface/implementation pairs) are extracted into `domain/` only when a second implementation appears or a use-case test needs a fake. Concrete is fine until then.
+
+**`infra/`** — Technical plumbing that isn't entity I/O: stream broadcasters, storage adapters, queues, schedulers.
+
+**`ui/`** — Components and hooks. Calls the slice's client use-cases (or repositories for trivial reads) and imports `domain/` for types and pure logic. Never touches server-side layers.
+
+**Edge (environment-specific)** — Thin adapters where transport meets application: route handlers, RPC procedures, server functions, queue consumers. Its job is fixed: validate input, resolve auth/context, call one use-case, return a plain serializable shape. Business logic at the edge is a defect.
+
+### Naming discipline
+
+`core/domain` is reserved for genuine business vocabulary shared across slices. Generic helpers — date formatting, result types, debounce — go in `core/lib`, never in a `domain` folder.
+
+### Dependency rules
+
+| From | May import |
+| --- | --- |
+| `domain/` | `core/domain`, `core/lib` only |
+| `use-cases/` | own `domain/`, own-side `repositories/` and `infra/`, other slices' `use-cases/`, core |
+| `repositories/` | own `domain/`, core |
+| `infra/` | own `domain/`, core |
+| edge | own-side `use-cases/`, `domain/`, core |
+| `ui/` | own-slice client `use-cases/` and `repositories/`, `domain/`, `core/ui`, `core/lib`, `core/infra` |
+
+Three rules carry most of the weight:
+
+1. **`domain/` is sealed.** It imports nothing with side effects and nothing from another slice.
+2. **Cross-slice traffic goes through use-cases only.** Slice A's use-case may call slice B's use-case; it may never reach into slice B's repositories.
+3. **Client code never imports server-side layers.** The client's only path to server logic runs: `ui` → client use-case → client repository → wire → edge → server use-case.
+
+Enforce these with tooling (`eslint-plugin-boundaries` or equivalent), not review vigilance.
+
+### Adding a feature
+
+Work domain-outward:
+
+1. **Domain first.** Define the entity, value objects, and rules in `<slice>/domain/`. If a concept crosses the wire, define its schema here too.
+2. **Use-case next.** Write the operation against domain and the repositories it needs. Cross-slice needs go through the other slice's use-cases.
+3. **Adapters.** Implement the repository and infra pieces the use-case demanded. The use-case's needs define the repository's shape, not the reverse.
+4. **Edge.** Expose the use-case through a thin transport adapter.
+5. **Client.** Client repository wrapping the edge → client use-case if the flow needs orchestration → `ui/`.
+
+If a step forces a dependency-rule violation, stop: the feature belongs in a different slice, or a shared concept needs to move to `core/domain`.
+
+### Runtime mappings
+
+The convention is fixed; how it lands depends on the runtime.
+
+- **Separate frontend + backend.** Both codebases carry the complete slice structure. Shared wire vocabulary lives in a contracts package (schemas, DTOs, enums). Share the contract, never the entities.
+- **Single-process fullstack (e.g., TanStack Start).** Server functions compile into RPC — the wire still exists at runtime. The edge is the server-function definition; the client repository stays as the lintable boundary. Guard server-only code mechanically (`*.server.ts` suffixes, `serverOnly()` helpers).
+- **Backend with multiple transports.** REST routes, RPC procedures, queue consumers, and bot handlers are all edges over the same use-cases. If adding a transport requires touching a use-case, the boundary is misplaced.
 
 ---
 
