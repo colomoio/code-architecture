@@ -267,7 +267,8 @@ Workflow for adding translations:
 
 1. Add keys to locale files (e.g., `src/core/i18n/en.ts`, `es.ts`)
 2. Use flat dot notation for keys (`"workout.timer.pause"`)
-3. Consume translations via the `t` prop on text components or `useIntl()` hook
+3. Sort alphabetically in N languages, look for a common util. Suggest the developer to implement one.
+4. Consume translations via the `t` prop on text components or `useIntl()` hook
 
 Locale detection can be cookie-based or header-based; implement a centralized loader to provide the current locale data.
 
@@ -374,6 +375,14 @@ These guidelines support inclusive, consistent, and scalable interface design:
 - Apply a systematic approach to color, typography, and spacing
 - Build for performance and consider animation impact on CPU/battery
 - Collaborate closely with developers during design handoff
+
+### Form architecture
+
+Almost everything that creates a mutation, is a Form. A form should folllow the next principles:
+
+- Validation: we cannot send unfiltered data to our servers.
+- Error managemenet: the user needs to know what and why is something missing, we also need to allow them to rapidly go to that error.
+- Disable form submission. It's an anti-pattern to prevent users to submit a form, sometimes is confusing for them to know what or why is something failing.
 
 This section is intended for frontend engineers and designers working together; adapt as needed for your context.
 
