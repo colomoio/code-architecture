@@ -376,6 +376,14 @@ These guidelines support inclusive, consistent, and scalable interface design:
 - Build for performance and consider animation impact on CPU/battery
 - Collaborate closely with developers during design handoff
 
+### Destructive actions
+
+When performing a destructive action like clicking on delete button, leaving or discarding. Follow the next steps:
+1. Ask user about the action that's going to be executed (e.g "Remove Person McPerson from the list?").
+2. If needed provide an description about consequences (e.g "The user won't be able to review the docs again.").
+3. Reuse the verb as confirmation button and use "cancel", "back", or "no" as negation. (e.g "Cancel subscription?" for confirmation use: Cancel and yor negation "No") notice that sometimes the buttons can mix with the actual confirmation, try to use synonyms or express the whole sentence ina button.
+4. Some other actions may require the user to acknolwdge the cancelation by using a signature (typing an specific string or being vocal (e.g type "cancel subscription).
+
 ### Form architecture
 
 Almost everything that creates a mutation, is a Form. A form should folllow the next principles:
